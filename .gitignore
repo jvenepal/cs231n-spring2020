@@ -1,0 +1,5 @@
+*-Copy1*
+.ipynb_checkpoints
+__pycache__
+datasets/
+!datasets/get_datasets.sh
