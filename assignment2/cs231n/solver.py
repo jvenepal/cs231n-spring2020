@@ -76,7 +76,7 @@ class Solver(object):
       If y is not None, run a training time forward and backward pass and
       return a tuple of:
       - loss: Scalar giving the loss
-      - grads: Dictionary with the same keys as self.params mapping parameter
+      - grads: Dictionary with the same keys as model.params mapping parameter
         names to gradients of the loss with respect to those parameters.
     """
 
@@ -159,7 +159,8 @@ class Solver(object):
         self.loss_history = []
         self.train_acc_history = []
         self.val_acc_history = []
-
+        
+        # jash: why do this?
         # Make a deep copy of the optim_config for each parameter
         self.optim_configs = {}
         for p in self.model.params:
@@ -244,9 +245,9 @@ class Solver(object):
         for i in range(num_batches):
             start = i * batch_size
             end = (i + 1) * batch_size
-            scores = self.model.loss(X[start:end])
+            scores = self.model.loss(X[start:end]) # when y is None, model.loss(X) returns scores
             y_pred.append(np.argmax(scores, axis=1))
-        y_pred = np.hstack(y_pred)
+        y_pred = np.hstack(y_pred) # y_pred is a list of lists before hstack?
         acc = np.mean(y_pred == y)
 
         return acc

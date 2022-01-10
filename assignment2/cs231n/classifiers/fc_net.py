@@ -204,9 +204,20 @@ class FullyConnectedNet(object):
         # parameters should be initialized to zeros.                               #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
+        
+        prev_dim = input_dim
+        for i, h in enumerate(hidden_dims):
+            w_str, b_str = "W" + str(i+1), "b" + str(i+1)
+            self.params[w_str] = weight_scale * np.random.randn(prev_dim, h)
+            self.params[b_str] = np.zeros(h)
+            if normalization is not None:
+                pass # add gamma & beta to self.params here
+            prev_dim = h
+        # last layer
+        self.params['W' + str(self.num_layers)] = weight_scale * np.random.randn(prev_dim, num_classes)
+        self.params['b' + str(self.num_layers)] = np.zeros(num_classes)
+        
+        
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -267,8 +278,17 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
-
+        # for now, implementing forward pass withOUT dropout & batch/layer norm
+        cache = {} # for storing cache of each layer; to be used during backprop
+        prev_out = X.copy() # so changes to prev_out doesn't change X
+        for i in range(1, self.num_layers + 1):
+            w_str, b_str = 'W' + str(i), 'b' + str(i)
+            W, b = self.params[w_str], self.params[b_str]
+            if i == self.num_layers: # last-layer; just affine
+                scores, cache[i] = affine_forward(prev_out, W, b)
+            else: # all other layers; affine + relu
+                prev_out, cache[i] = affine_relu_forward(prev_out, W, b)
+            
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -294,7 +314,24 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # again, for now, implementing withOUT dropout & batch/layer norm
+        loss, dscores = softmax_loss(scores, y)
+        # adding L2 reg.
+        w_sum = 0
+        for i in range(1, self.num_layers + 1):
+            W = self.params['W' + str(i)]
+            w_sum += np.sum(W * W)
+        loss += 0.5 * self.reg * w_sum
+        
+        # backprop
+        for i in range(self.num_layers, 0, -1):
+            w_str, b_str = 'W' + str(i), 'b' + str(i)
+            if i == self.num_layers: # last layer; just affine
+                dout, dw, db = affine_backward(dscores, cache[i])
+            else:
+                dout, dw, db = affine_relu_backward(dout, cache[i])
+            grads[w_str], grads[b_str] = dw, db
+            grads[w_str] += self.reg * self.params[w_str] # add reg. component
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
