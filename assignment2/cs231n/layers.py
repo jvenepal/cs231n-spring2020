@@ -201,7 +201,22 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+#         sample_mean, sample_var = np.mean(x, axis=0), np.var(x, axis=0) # (D,)
+#         norm_x = (x - sample_mean) / (np.sqrt(sample_var) + eps) # (N, D)
+        # above direct implementation doesn't work when calculating gradients
+        # using computation graph. Use below implementation instead:
+        sample_mean = np.mean(x, axis=0) # (D,)
+        u = x - sample_mean # (N, D)
+        u2 = u**2 # (N, D)
+        sample_var = np.mean(u2, axis=0) # (D,)
+        std = np.sqrt(sample_var + eps) # (D,)
+        inv = 1 / std # (D,)
+        norm_x = u * inv # (N, D)
+        
+        out = gamma * norm_x + beta # (N, D)
+        running_mean = momentum * running_mean + (1 - momentum) * sample_mean
+        running_var = momentum * running_var + (1 - momentum) * sample_var
+        cache = x, norm_x, gamma, u, std, sample_var, eps, inv, N
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
@@ -215,8 +230,8 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # Store the result in the out variable.                               #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
+        norm_x = (x - running_mean) / (np.sqrt(running_var) + eps)
+        out = gamma * norm_x + beta # (N, D)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
@@ -258,7 +273,40 @@ def batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, norm_x, gamma, u, std, sample_var, eps, inv, N = cache
+    # the BN paper gives the derivates
+#     dbeta = np.sum(dout, axis=0) # (D,)
+#     dgamma = np.sum(dout * norm_x, axis=0) # (D,)
+#     dnorm_x = dout * gamma.reshape(1, -1) # (N, D)
+#     dsample_var = -np.sum(dnorm_x * (x - sample_mean.reshape(1, -1)), axis=0) # (D,)
+#     sample_std = np.sqrt(sample_var + eps) # (D,)
+#     dsample_var /= 2 * (sample_std**3) # (D,)
+#     dsample_mean1 = -np.sum(dnorm_x, axis=0) / sample_std # (D,)   
+#     dsample_mean2 = -2 * np.sum(x - sample_mean.reshape(1, -1), axis=0) / N # (D,)
+#     dsample_mean = dsample_mean1 + dsample_mean2 # (D,)
+#     dx1 = dnorm_x / sample_std.reshape(1, -1) # (N, D)
+#     dx2 = dsample_var.reshape(1, -1) * 2 * (x - sample_mean) / N # (N, D)
+#     dx3 = dsample_mean.reshape(1, -1) / N # (N, D)
+#     dx = dx1 + dx2 + dx3 # (N, D)
+
+    # Below link was really helpful, especially for calculating the gradient of mean
+    # https://kratzert.github.io/2016/02/12/understanding-the-gradient-flow-through-the-batch-normalization-layer.html
+    # Also, look at my 'assignment2/BatchNormCompGraph.pdf' for hand implementation.
+    dbeta = np.sum(dout, axis=0) # (D,)
+    dgamma = np.sum(dout * norm_x, axis=0) # (D,)
+    dnorm_x = dout * gamma # (N, D)
+    dinv = np.sum(dnorm_x * u, axis=0) # (D,)
+    dstd = -dinv / std**2 # (D,)
+    dsample_var = dstd / (2 * np.sqrt(sample_var + eps)) # (D,)
+    du2 = np.ones_like(x) * dsample_var / N # (N, D)
+    du_1 = 2 * u * du2 # (N, D)
+    du_2 = dnorm_x * inv # (N, D)
+    du = du_1 + du_2 # (N, D)
+    dx_1 = du # (N, D)
+    dm = -np.sum(du, axis=0) # (D,)
+    dx_2 = np.ones_like(x) * dm / N # (N, D)
+    dx = dx_1 + dx_2
+    
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -293,7 +341,23 @@ def batchnorm_backward_alt(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, norm_x, gamma, u, std, sample_var, eps, inv, N = cache
+    sample_mean = np.mean(x, axis=0)
+    sample_std = std
+    # BatchNorm paper gives the derivates directly. Refer to it for below implementation.
+    dnorm_x = dout * gamma # (N, D) eq. 1
+    sample_std = np.sqrt(sample_var + eps) # (D,)
+    denom_eq2 = -2.0 * sample_std**3.0 # (D,)
+    dsample_var = np.sum(dnorm_x * (x - sample_mean) / denom_eq2, axis=0) # (D,) eq. 2
+    dsample_mean1 = -1 * np.sum(dnorm_x / sample_std, axis=0) # (D,)
+    dsample_mean2 = dsample_var * -2 * np.mean(x - sample_mean, axis=0) # (D,)
+    dsample_mean = dsample_mean1 + dsample_mean2 # (D,) eq. 3
+    dx1 = dnorm_x / sample_std # (N, D)
+    dx2 = dsample_var * 2 * (x - sample_mean) / N # (N, D)
+    dx3 = dsample_mean / N # (D,)
+    dx = dx1 + dx2 + dx3 # (N, D) eq. 4
+    dgamma = np.sum(dout * norm_x, axis=0) # (D,) eq. 5
+    dbeta = np.sum(dout, axis=0) # (D, ) eq. 6
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################

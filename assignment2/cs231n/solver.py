@@ -160,7 +160,11 @@ class Solver(object):
         self.train_acc_history = []
         self.val_acc_history = []
         
-        # jash: why do this?
+        # jash: why do this? ans: so we can keep a copy for each param
+        # while it doesn't make sense to store a copy of lr seperately for each
+        # param, it is needed to have a seperate copy of velocity for sgd+momentum
+        # it's stored as a dict self.optim_configs[p] = {lr:..., 'velocity': (p.shape)}
+
         # Make a deep copy of the optim_config for each parameter
         self.optim_configs = {}
         for p in self.model.params:
