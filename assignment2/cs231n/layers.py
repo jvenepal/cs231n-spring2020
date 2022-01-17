@@ -274,21 +274,6 @@ def batchnorm_backward(dout, cache):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     x, norm_x, gamma, u, std, sample_var, eps, inv, N = cache
-    # the BN paper gives the derivates
-#     dbeta = np.sum(dout, axis=0) # (D,)
-#     dgamma = np.sum(dout * norm_x, axis=0) # (D,)
-#     dnorm_x = dout * gamma.reshape(1, -1) # (N, D)
-#     dsample_var = -np.sum(dnorm_x * (x - sample_mean.reshape(1, -1)), axis=0) # (D,)
-#     sample_std = np.sqrt(sample_var + eps) # (D,)
-#     dsample_var /= 2 * (sample_std**3) # (D,)
-#     dsample_mean1 = -np.sum(dnorm_x, axis=0) / sample_std # (D,)   
-#     dsample_mean2 = -2 * np.sum(x - sample_mean.reshape(1, -1), axis=0) / N # (D,)
-#     dsample_mean = dsample_mean1 + dsample_mean2 # (D,)
-#     dx1 = dnorm_x / sample_std.reshape(1, -1) # (N, D)
-#     dx2 = dsample_var.reshape(1, -1) * 2 * (x - sample_mean) / N # (N, D)
-#     dx3 = dsample_mean.reshape(1, -1) / N # (N, D)
-#     dx = dx1 + dx2 + dx3 # (N, D)
-
     # Below link was really helpful, especially for calculating the gradient of mean
     # https://kratzert.github.io/2016/02/12/understanding-the-gradient-flow-through-the-batch-normalization-layer.html
     # Also, look at my 'assignment2/BatchNormCompGraph.pdf' for hand implementation.
@@ -403,8 +388,22 @@ def layernorm_forward(x, gamma, beta, ln_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
-
+    #mean, var = np.mean(x, axis=1), np.var(x, axis=1) # (N,)
+    #norm_x = (x - mean.reshape(-1, 1)) / np.sqrt(var.reshape(-1, 1) + eps) # (N, D)
+    #out = gamma * norm_x + beta # (N, D)
+    # while above implementation works, it is not in a form that works with
+    # computational graphs. Use below implementation instead.
+    N, D = x.shape
+    mean = np.mean(x, axis=1) # (N,)
+    u = x - mean.reshape(-1, 1) # (N, D)
+    u2 = u**2 # (N, D)
+    var = np.mean(u2, axis=1) # (N,)
+    std = np.sqrt(var + eps) # (N,)
+    inv = 1 / std # (N,)
+    norm_x = u * inv.reshape(-1, 1) # (N, D)
+    out = gamma * norm_x + beta # (N, D)
+    cache = x, norm_x, gamma, u, std, var, eps, inv, N, D
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -437,8 +436,23 @@ def layernorm_backward(dout, cache):
     # still apply!                                                            #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
+    
+    x, norm_x, gamma, u, std, var, eps, inv, N, D = cache
+    # below code copied from batchnorm_backward() function
+    dbeta = np.sum(dout, axis=0) # (D,)
+    dgamma = np.sum(dout * norm_x, axis=0) # (D,)
+    dnorm_x = dout * gamma # (N, D)
+    dinv = np.sum(dnorm_x * u, axis=1) # (N,)
+    dstd = -dinv / std**2 # (N,)
+    dvar = dstd / (2 * np.sqrt(var + eps)) # (N,)
+    du2 = np.ones_like(x) * dvar.reshape(-1, 1) / D # (N, D)
+    du_1 = 2 * u * du2 # (N, D)
+    du_2 = dnorm_x * inv.reshape(-1, 1) # (N, D)
+    du = du_1 + du_2 # (N, D)
+    dx_1 = du # (N, D)
+    dm = -np.sum(du, axis=1) # (N,)
+    dx_2 = np.ones_like(x) * dm.reshape(-1, 1) / D # (N, D)
+    dx = dx_1 + dx_2
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
