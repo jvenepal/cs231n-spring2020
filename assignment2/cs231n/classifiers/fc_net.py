@@ -282,13 +282,14 @@ class FullyConnectedNet(object):
 
         # for now, implementing forward pass withOUT dropout & batch/layer norm
         cache = {} # for storing cache of each layer; to be used during backprop
+        dropout_cache = {}
         prev_out = X.copy() # so changes to prev_out doesn't change X
         for i in range(1, self.num_layers + 1):
             w_str, b_str = 'W' + str(i), 'b' + str(i)
             W, b = self.params[w_str], self.params[b_str]
             if i == self.num_layers: # last-layer; just affine
                 scores, cache[i] = affine_forward(prev_out, W, b)
-            else: # all other layers; affine + [batch/layer norm] + relu
+            else: # all other layers; affine + [batch/layer norm] + relu + [dropout]
                 if self.normalization == None:
                     prev_out, cache[i] = affine_relu_forward(prev_out, W, b)
                 elif self.normalization == 'batchnorm':
@@ -301,6 +302,8 @@ class FullyConnectedNet(object):
                     gamma, beta = self.params[gamma_sta], self.params[beta_str]
                     bn_param = self.bn_params[i-1] # indexed from 0
                     prev_out, cache[i] = affine_ln_relu_forward(prev_out, W, b, gamma, beta, bn_param)
+                if self.use_dropout: # account for dropout
+                    prev_out, dropout_cache[i] = dropout_forward(prev_out, self.dropout_param)
             
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -342,7 +345,9 @@ class FullyConnectedNet(object):
             gamma_str, beta_str = 'gamma' + str(i), 'beta' + str(i)
             if i == self.num_layers: # last layer; just affine
                 dout, dw, db = affine_backward(dscores, cache[i])
-            else: # all other layers; affine + [batch/layer norm] + relu
+            else: # all other layers; affine + [batch/layer norm] + relu + [dropout]
+                if self.use_dropout: # backprop through dropout layer
+                    dout = dropout_backward(dout, dropout_cache[i])
                 if self.normalization == None:
                     dout, dw, db = affine_relu_backward(dout, cache[i])
                 elif self.normalization == 'batchnorm':
