@@ -3,3 +3,6 @@
 __pycache__
 datasets/
 !datasets/get_datasets.sh
+**/cs231n/build/
+**/cs231n/im2col_cython.c
+**/cs231n/im2col_cython.cpython-37m-darwin.so

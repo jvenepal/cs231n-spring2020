@@ -591,8 +591,25 @@ def conv_forward_naive(x, w, b, conv_param):
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
+    
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    pad, stride = conv_param['pad'], conv_param['stride']
+    Hout, Wout = 1 + (H + 2 * pad - HH) // stride, 1 + (W + 2 * pad - WW) // stride
+    out = np.zeros((N, F, Hout, Wout))
+    # zero-pad x along H & W axis by adding pad # of zeros on each edge
+    xpad = np.pad(x, ((0,0), (0,0), (pad, pad), (pad, pad)), mode='constant')
+        
+    for n in range(N):
+        for f in range(F):
+            for h in range(Hout):
+                hnow = h * stride # current row in H axis
+                for jw in range(Wout): # jw iterates over width
+                    wnow = jw * stride
+                    # get n-th image, all channels, HH*WW slice of xpad
+                    xmini = xpad[n, :, hnow:hnow+HH, wnow:wnow+WW] # same shape as kernel
+                    kernel = w[f, :, :, :] # f-th filter of shape (C, HH, WW)
+                    out[n, f, h, jw] = (xmini * kernel).sum() + b[f] # scalar
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -620,9 +637,31 @@ def conv_backward_naive(dout, cache):
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
+    
+    x, w, b, conv_param = cache
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    pad, stride = conv_param['pad'], conv_param['stride']
+    Hout, Wout = 1 + (H + 2 * pad - HH) // stride, 1 + (W + 2 * pad - WW) // stride
+    out = np.zeros((N, F, Hout, Wout))
+    # zero-pad x along H & W axis by pad # of zeros on each edge
+    xpad = np.pad(x, ((0,0), (0,0), (pad, pad), (pad, pad)), mode='constant')
+    
+    # gradients have the same shape as the vectors themselves
+    dx, dw, db = np.zeros_like(x), np.zeros_like(w), np.zeros_like(b)
+    dxpad = np.zeros_like(xpad)
+    
+    for n in range(N):
+        for f in range(F):
+            for h in range(Hout):
+                hnow = h * stride
+                for jw in range(Wout):
+                    wnow = jw * stride
+                    dxpad[n, :, hnow:hnow+HH, wnow:wnow+WW] += dout[n, f, h, jw] * w[f, :, :, :] # (C, HH, WW)
+                    dw[f, :, :, :] += dout[n, f, h, jw] * xpad[n, :, hnow:hnow+HH, wnow:wnow+WW]
+    
+    dx = dxpad[:, :, pad:-pad, pad:-pad]
+    db = dout.sum(axis=(0, 2, 3)) # (F,)
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -655,7 +694,19 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+    pw, ph, s = pool_param['pool_width'], pool_param['pool_height'], pool_param['stride']
+    Hout, Wout = 1 + (H - ph) // s, 1 + (W - pw) // s
+    out = np.zeros((N, C, Hout, Wout))
+
+    # for a given image, pooling is applied seperately for each channel along
+    # height & width axes.
+    for n in range(N):
+        for c in range(C):
+            for h in range(Hout):
+                for w in range(Wout):
+                    out[n, c, h, w] = x[n, c, h*s:h*s+ph, w*s:w*s+pw].max()
+                    
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -682,7 +733,24 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, pool_param = cache
+    N, C, Hout, Wout = dout.shape
+    dx = np.zeros_like(x)
+    pw, ph, s = pool_param['pool_width'], pool_param['pool_height'], pool_param['stride']
+    
+    # max gate acts like a switch during forward pass. So during backward pass,
+    # the gradient flows to the input that is chosen during forward pass.
+    # The gradient to all other inputs is zero.
+    for n in range(N):
+        for c in range(C):
+            for h in range(Hout):
+                for w in range(Wout):
+                    # get the slice of input used during forward pass, get the
+                    # index of max value in this slice and pass the grad to the index
+                    current_slice = x[n, c, h*s:h*s+ph, w*s:w*s+pw] # (ph, pw)
+                    mask = np.unravel_index(current_slice.argmax(), current_slice.shape)
+                    m0, m1 = mask[0], mask[1] # mask is a tuple
+                    dx[n, c, h*s:h*s+ph, w*s:w*s+pw][m0, m1] += dout[n, c, h, w]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
